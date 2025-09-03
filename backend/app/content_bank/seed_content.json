@@ -1,0 +1,45 @@
+[
+    {
+      "topic": "linear_algebra",
+      "skill": "vectors",
+      "level": "remember",
+      "content": "Define a vector and give an example in R^2."
+    },
+    {
+      "topic": "linear_algebra",
+      "skill": "matrix_multiplication",
+      "level": "understand",
+      "content": "Explain why matrix multiplication is not commutative and show a counterexample."
+    },
+    {
+      "topic": "linear_algebra",
+      "skill": "gaussian_elimination",
+      "level": "apply",
+      "content": "Solve the system Ax=b using Gaussian elimination for A=[[1,2],[3,4]], b=[5,6]."
+    },
+    {
+      "topic": "linear_algebra",
+      "skill": "eigenvalues",
+      "level": "analyze",
+      "content": "Given A=[[2,1],[0,3]], analyze eigenvalues and eigenvectors and interpret geometrically."
+    },
+    {
+      "topic": "linear_algebra",
+      "skill": "spectral_theorem",
+      "level": "evaluate",
+      "content": "Critically evaluate conditions under which a real symmetric matrix is diagonalizable and why it matters."
+    },
+    {
+      "topic": "linear_algebra",
+      "skill": "applications",
+      "level": "create",
+      "content": "Design a dimensionality reduction mini-pipeline using PCA for 2D visualization of 5D data."
+    },
+    {
+      "topic": "probability",
+      "skill": "bayes",
+      "level": "understand",
+      "content": "State Bayes' theorem and explain each term with a simple example."
+    }
+  ]
+  
