@@ -1,8 +1,14 @@
 FROM python:3.11-slim
+
 WORKDIR /app
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
+
 COPY backend ./backend
-COPY .env ./
+
+RUN sed -i 's/\r$//' backend/start.sh || true && chmod +x backend/start.sh
+
 ENV PYTHONUNBUFFERED=1
-CMD ["bash","-lc","backend/start.sh"]
+
+CMD ["bash", "/app/backend/start.sh"]

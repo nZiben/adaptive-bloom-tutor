@@ -4,11 +4,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend ./backend
-COPY .env ./
-
-RUN sed -i 's/\r$//' backend/start.sh && chmod +x backend/start.sh
+COPY frontend ./frontend
 
 ENV PYTHONUNBUFFERED=1
-
-CMD ["bash", "backend/start.sh"]
+CMD ["streamlit", "run", "frontend/streamlit_app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
