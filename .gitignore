@@ -208,3 +208,5 @@ __marimo__/
 
 minio_data
 chroma_store
+merge.py
+all_code.txt
