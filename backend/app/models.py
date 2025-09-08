@@ -1,19 +1,22 @@
-from typing import Optional, Dict
+from typing import Optional, Any
 from sqlmodel import SQLModel, Field
-from sqlalchemy import JSON  # ← use SQLAlchemy JSON type
+from sqlalchemy import Column, JSON
 from datetime import datetime
 import uuid
+
 
 def uuid_str() -> str:
     return str(uuid.uuid4())
 
+
 class SessionDB(SQLModel, table=True):
     id: str = Field(default_factory=uuid_str, primary_key=True)
-    mode: str  = Field(index=True)  # "exam" | "diagnostic"
+    mode: str = Field(index=True)  # "exam" | "diagnostic"
     topic: str = Field(index=True)
     student_id: Optional[str] = Field(default=None, index=True)
     started_at: datetime = Field(default_factory=datetime.utcnow)
     status: str = Field(default="active")  # active/completed
+
 
 class MessageDB(SQLModel, table=True):
     id: str = Field(default_factory=uuid_str, primary_key=True)
@@ -23,8 +26,10 @@ class MessageDB(SQLModel, table=True):
     bloom_level: Optional[str] = Field(default=None)
     score: Optional[float] = Field(default=None)
     confidence: Optional[float] = Field(default=None)
-    meta: Optional[Dict] = Field(default=None, sa_column_kwargs={"type_": JSON})
+    # Use builtin dict typing and explicit Column(JSON)
+    meta: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))
     ts: datetime = Field(default_factory=datetime.utcnow, index=True)
+
 
 class SkillScoreDB(SQLModel, table=True):
     id: str = Field(default_factory=uuid_str, primary_key=True)
@@ -35,10 +40,10 @@ class SkillScoreDB(SQLModel, table=True):
     irt_theta: float = Field(default=0.0)       # ability
     last_update: datetime = Field(default_factory=datetime.utcnow)
 
+
 class EventLogDB(SQLModel, table=True):
     id: str = Field(default_factory=uuid_str, primary_key=True)
     session_id: Optional[str] = Field(default=None, index=True)
     type: str = Field(index=True)  # telemetry, moderation, error, info
-    payload: Dict = Field(default_factory=dict, sa_column_kwargs={"type_": JSON})
+    payload: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     ts: datetime = Field(default_factory=datetime.utcnow, index=True)
-
