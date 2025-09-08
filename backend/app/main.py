@@ -82,3 +82,7 @@ def complete_session(session_id: str, s: Session = Depends(get_session)):
     if not se: raise HTTPException(404, "Session not found")
     se.status = "completed"; s.add(se); s.commit()
     return {"ok": True}
+
+@app.get("/health")
+def health():
+    return {"ok": True}
