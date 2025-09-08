@@ -1,27 +1,4 @@
-version: "3.9"
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
-    env_file: .env
-    ports: ["8000:8000"]
-    volumes:
-      - ./backend:/app/backend
-      - ./chroma_store:/app/chroma_store
-      - ./backend/app/content_bank:/app/backend/app/content_bank
-    depends_on:
-      - minio
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    env_file: .env
-    ports: ["8501:8501"]
-    volumes:
-      - ./frontend:/app/frontend
-
   minio:
     image: quay.io/minio/minio:RELEASE.2024-08-17T01-24-54Z
     environment:
@@ -31,3 +8,41 @@ services:
     ports: ["9000:9000","9001:9001"]
     volumes:
       - ./minio_data:/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    env_file: .env
+    environment:
+      # внутри контейнера MinIO доступен по имени сервиса
+      S3_ENDPOINT_URL: http://minio:9000
+    ports: ["8000:8000"]
+    volumes:
+      - ./backend:/app/backend
+      - ./chroma_store:/app/chroma_store
+      - ./backend/app/content_bank:/app/backend/app/content_bank
+    depends_on:
+      - minio
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\nPY"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    env_file: .env
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports: ["8501:8501"]
+    volumes:
+      - ./frontend:/app/frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
