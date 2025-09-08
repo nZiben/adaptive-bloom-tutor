@@ -3,6 +3,6 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend ./backend
-COPY .env.example ./
+COPY .env ./
 ENV PYTHONUNBUFFERED=1
 CMD ["bash","-lc","backend/start.sh"]
