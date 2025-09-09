@@ -1,8 +1,9 @@
-import requests, time
+import requests
 from typing import List, Dict
 from ..config import settings
 
 API_URL = "https://api.mistral.ai/v1"
+
 
 class MistralClient:
     def __init__(self, api_key: str | None = None):
@@ -12,14 +13,18 @@ class MistralClient:
         self.session = requests.Session()
         self.session.headers.update({"Authorization": f"Bearer {self.api_key}"})
 
-    def chat(self, messages: List[Dict], temperature=0.2, tools: List[Dict] | None = None, response_format: Dict | None = None) -> str:
-        payload = {
-            "model": self.chat_model,
-            "messages": messages,
-            "temperature": temperature
-        }
-        if tools: payload["tools"] = tools
-        if response_format: payload["response_format"] = response_format
+    def chat(
+        self,
+        messages: List[Dict],
+        temperature: float = 0.2,
+        tools: List[Dict] | None = None,
+        response_format: Dict | None = None,
+    ) -> str:
+        payload: Dict = {"model": self.chat_model, "messages": messages, "temperature": temperature}
+        if tools:
+            payload["tools"] = tools
+        if response_format:
+            payload["response_format"] = response_format
         r = self.session.post(f"{API_URL}/chat/completions", json=payload, timeout=60)
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
@@ -28,9 +33,7 @@ class MistralClient:
         r = self.session.post(
             f"{API_URL}/embeddings",
             json={"model": self.embed_model, "input": texts},
-            timeout=60
+            timeout=60,
         )
         r.raise_for_status()
         return [d["embedding"] for d in r.json()["data"]]
-
-client = MistralClient()
