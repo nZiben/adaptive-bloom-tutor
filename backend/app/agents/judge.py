@@ -2,19 +2,19 @@ import json
 from ..llm.router import client
 
 SCHEMA_HINT = (
-    'Respond ONLY as strict JSON with keys: '
+    'Отвечай ТОЛЬКО строгим JSON со следующими ключами: '
     '{"bloom_level": "<remember|understand|apply|analyze|evaluate|create>", '
     '"score": <0..1>, "confidence": <0..1>, "errors": ["..."], "skills": ["algebra","logic",...]}'
 )
 
 SYSTEM = (
-    "You are Judge/Scorer. Given the question and student's answer, assess using Bloom taxonomy. "
-    "Consider correctness, reasoning depth, generalization. Return structured JSON only."
+    "Вы — Judge/Scorer. По вопросу и ответу студента оцените по таксономии Блума. "
+    "Учитывайте корректность, глубину рассуждений и обобщение. Возвращайте только структурированный JSON."
 )
 
 
 def score_answer(question: str, answer: str) -> dict:
-    prompt = f"{SCHEMA_HINT}\nQuestion:{question}\nAnswer:{answer}\nReturn JSON only."
+    prompt = f"{SCHEMA_HINT}\nВопрос: {question}\nОтвет: {answer}\nВерни только JSON."
     resp = client.chat(
         [{"role": "system", "content": SYSTEM}, {"role": "user", "content": prompt}],
         temperature=0.0,

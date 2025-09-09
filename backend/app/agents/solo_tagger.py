@@ -1,8 +1,8 @@
 from ..llm.router import client
 
 SYSTEM = (
-    "You are SOLO-Tagger. Classify student's answer by SOLO taxonomy. "
-    "Return ONE token: prestructural | unistructural | multistructural | relational | extended-abstract."
+    "Вы — SOLO-Tagger. Классифицируйте ответ студента по таксономии SOLO. "
+    "Верните ОДИН токен: prestructural | unistructural | multistructural | relational | extended-abstract."
 )
 
 LEVELS = ["prestructural", "unistructural", "multistructural", "relational", "extended-abstract"]
@@ -13,7 +13,7 @@ def tag_solo(text: str) -> str:
         client.chat(
             [
                 {"role": "system", "content": SYSTEM},
-                {"role": "user", "content": f"Answer:\n{text}\nLevel? ONE TOKEN."},
+                {"role": "user", "content": f"Ответ:\n{text}\nУровень? ONE TOKEN (один токен)."},
             ],
             temperature=0.0,
         )

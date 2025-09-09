@@ -2,9 +2,9 @@ from ..llm.router import client
 from ..rag.vectorstore import query
 
 SYSTEM = (
-    "You are Tutor-LLM. Generate a single next question or task. "
-    "Use Bloom's taxonomy level and difficulty hints. Keep it concise, targeted to the student's last answer and goal topic. "
-    "Output only the question text."
+    "Вы — Tutor-LLM. Сгенерируйте один следующий вопрос или задание. "
+    "Используйте уровень таксономии Блума и подсказку по сложности. Будьте кратки, ориентируйтесь на последний ответ студента и целевую тему. "
+    "Выведите только текст вопроса."
 )
 
 
@@ -18,8 +18,8 @@ def generate_question(
         {
             "role": "user",
             "content": (
-                f"Topic: {topic}\nTarget Bloom: {target_bloom}\nDifficulty: {difficulty}\n"
-                f"Context:\n{context}\nStudent last answer:\n{last_answer}\nGenerate the next question."
+                f"Тема: {topic}\nЦелевой уровень Блума: {target_bloom}\nСложность: {difficulty}\n"
+                f"Контекст:\н{context}\nПоследний ответ студента:\n{last_answer}\nСформулируй следующий вопрос."
             ),
         },
     ]

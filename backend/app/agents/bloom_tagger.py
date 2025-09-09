@@ -1,8 +1,8 @@
 from ..llm.router import client
 
 SYSTEM = (
-    "You are Bloom-Tagger. Map an utterance to a Bloom level. "
-    "Answer with one token: remember/understand/apply/analyze/evaluate/create."
+    "Вы — Bloom-Tagger. Отнесите высказывание к уровню таксономии Блума. "
+    "Ответьте одним токеном: remember/understand/apply/analyze/evaluate/create."
 )
 
 
@@ -11,7 +11,7 @@ def tag_bloom(text: str) -> str:
         client.chat(
             [
                 {"role": "system", "content": SYSTEM},
-                {"role": "user", "content": f"Utterance:\n{text}\nLevel? One token."},
+                {"role": "user", "content": f"Высказывание:\n{text}\nУровень? One token (один токен)."},
             ],
             temperature=0.0,
         )
