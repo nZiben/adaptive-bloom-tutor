@@ -17,7 +17,10 @@ def api_headers():
 def api_post(path, json_body):
     r = requests.post(f"{BACKEND}{path}", json=json_body, headers=api_headers())
     if not r.ok:
-        st.error(f"API error {r.status_code}: {r.text}")
+        try:
+            st.error(f"API error {r.status_code}: {r.json().get('detail')}")
+        except Exception:
+            st.error(f"API error {r.status_code}: {r.text}")
         r.raise_for_status()
     return r
 
@@ -25,9 +28,22 @@ def api_post(path, json_body):
 def api_get(path):
     r = requests.get(f"{BACKEND}{path}", headers=api_headers())
     if not r.ok:
-        st.error(f"API error {r.status_code}: {r.text}")
+        try:
+            st.error(f"API error {r.status_code}: {r.json().get('detail')}")
+        except Exception:
+            st.error(f"API error {r.status_code}: {r.text}")
         r.raise_for_status()
     return r
+
+
+def load_topics() -> list[dict]:
+    try:
+        data = api_get("/api/topics").json()
+        return data
+    except Exception:
+        # fallback на статические темы
+        return [{"id": "static-la", "name": "linear_algebra", "question_count": 0},
+                {"id": "static-prob", "name": "probability", "question_count": 0}]
 
 
 # --------- Sidebar ---------
@@ -42,16 +58,21 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "meta" not in st.session_state:
     st.session_state.meta = {}
+if "me" not in st.session_state:
+    st.session_state.me = None
 
 with st.sidebar.container():
     if st.session_state.token:
         me = api_get("/api/me").json()
-        st.sidebar.success(f"Вошли как: {me['username']}")
+        st.session_state.me = me
+        role_badge = "👑 admin" if me.get("role") == "admin" else "🎒 student"
+        st.sidebar.success(f"Вошли как: {me['username']} ({role_badge})")
         if st.sidebar.button("Выйти"):
             st.session_state.token = None
             st.session_state.session_id = None
             st.session_state.history = []
             st.session_state.meta = {}
+            st.session_state.me = None
             st.rerun()
     else:
         tab_login, tab_reg = st.tabs(["Вход", "Регистрация"])
@@ -66,18 +87,23 @@ with st.sidebar.container():
         with tab_reg:
             reg_email = st.text_input("Email для регистрации", key="reg_email")
             username = st.text_input("Имя", key="reg_username")
+            role = st.selectbox("Роль", ["student", "admin"], index=0, help="Администратор может создавать темы и вопросы.")
             reg_pass = st.text_input("Пароль (мин. 6 символов)", type="password", key="reg_pass")
             if st.button("Зарегистрироваться"):
                 r = api_post(
                     "/api/auth/register",
-                    {"email": reg_email, "username": username, "password": reg_pass},
+                    {"email": reg_email, "username": username, "password": reg_pass, "role": role},
                 )
                 st.session_state.token = r.json()["token"]
                 st.success("Аккаунт создан!")
                 st.rerun()
 
-mode = st.sidebar.selectbox("Режим", ["exam", "diagnostic"])
-topic = st.sidebar.selectbox("Тема", ["linear_algebra", "probability"])
+# Роль влияет только на админ-страницу; тест можно проходить всем авторизованным
+topics = load_topics()
+topic_names = [t["name"] for t in topics] or ["linear_algebra", "probability"]
+
+mode = st.sidebar.selectbox("Режим", ["exam", "diagnostic"], help="В 'exam' — ровно 10 вопросов. В 'diagnostic' — без лимита.")
+topic = st.sidebar.selectbox("Тема", topic_names)
 student_id = st.sidebar.text_input("Student ID (опц.)", "user-1")
 
 if st.session_state.get("token"):
@@ -152,7 +178,7 @@ with col2:
 
 st.divider()
 st.subheader("Тестбенч")
-tb_topic = st.selectbox("Тема тестбенча", ["linear_algebra", "probability"], key="tb_topic")
+tb_topic = st.selectbox("Тема тестбенча", topic_names, key="tb_topic")
 q1 = st.text_area("Вопрос #1", value="State Bayes' theorem.")
 a1 = st.text_area("Идеальный ответ #1", value="Bayes' theorem: P(A|B)=P(B|A)P(A)/P(B).")
 if st.button("Запустить тестбенч (1 кейс)"):
