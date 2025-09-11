@@ -17,7 +17,28 @@ class UserDB(SQLModel, table=True):
     email: str = Field(index=True, unique=True)
     username: str = Field(index=True)
     password_hash: str
+    role: str = Field(default="student", index=True)  # "admin" | "student"
     created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# --- Admin content: Topics & Questions ---
+
+
+class TopicDB(SQLModel, table=True):
+    id: str = Field(default_factory=uuid_str, primary_key=True)
+    name: str = Field(index=True, unique=True)
+    created_by: Optional[str] = Field(default=None, index=True)  # UserDB.id
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class QuestionDB(SQLModel, table=True):
+    id: str = Field(default_factory=uuid_str, primary_key=True)
+    topic_id: str = Field(index=True, foreign_key="topicdb.id")
+    text: str = Field()
+    ideal_answer: Optional[str] = Field(default=None)
+    bloom_hint: Optional[str] = Field(default=None)   # optional admin hint
+    difficulty: Optional[str] = Field(default=None)   # easy/medium/hard (optional)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
 # --- Sessions / Messages / Skills ---
@@ -26,11 +47,12 @@ class UserDB(SQLModel, table=True):
 class SessionDB(SQLModel, table=True):
     id: str = Field(default_factory=uuid_str, primary_key=True)
     mode: str = Field(index=True)  # "exam" | "diagnostic"
-    topic: str = Field(index=True)
+    topic: str = Field(index=True)  # human-readable topic name (TopicDB.name)
     student_id: Optional[str] = Field(default=None, index=True)  # legacy external id
     user_id: Optional[str] = Field(default=None, index=True)  # FK soft link to UserDB.id
     started_at: datetime = Field(default_factory=datetime.utcnow)
     status: str = Field(default="active")  # active/completed
+    max_questions: Optional[int] = Field(default=None, index=True)  # 10 для exam, None иначе
 
 
 class MessageDB(SQLModel, table=True):
@@ -39,7 +61,7 @@ class MessageDB(SQLModel, table=True):
     role: str = Field()  # user/assistant/system
     content: str = Field()
     bloom_level: Optional[str] = Field(default=None)
-    solo_level: Optional[str] = Field(default=None)  
+    solo_level: Optional[str] = Field(default=None)
     score: Optional[float] = Field(default=None)
     confidence: Optional[float] = Field(default=None)
     meta: Optional[dict[str, Any]] = Field(default=None, sa_column=Column(JSON))

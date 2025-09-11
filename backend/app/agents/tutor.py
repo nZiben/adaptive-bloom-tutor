@@ -33,7 +33,7 @@ def generate_question(
     # Подготовим контекст через RAG (безопасно к падениям)
     try:
         hits = query(last_answer or topic, n=n_docs, topic=topic)
-        context = "\n\n".join([f\"[DOC {i+1}] {h['text']}\" for i, h in enumerate(hits)])
+        context = "\n\n".join([f"[DOC {i+1}] {h['text']}" for i, h in enumerate(hits)])
     except Exception:
         hits = []
         context = ""
