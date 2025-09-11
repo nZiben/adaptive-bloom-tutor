@@ -1,9 +1,10 @@
+from collections import Counter
+from sqlalchemy import func
+from sqlmodel import Session, select
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-from sqlmodel import Session, select
-from sqlalchemy import func
-from collections import Counter
+
 from .config import settings
 from .db import init_db, get_session
 from .models import (
@@ -18,6 +19,7 @@ from .orchestrator import run_turn
 from .reporting import generate_report_png, export_profile_json
 from .s3_client import ensure_bucket
 from .security import hash_password, verify_password, create_token, get_current_user
+from .agents.judge import score_answer  # <-- добавлено
 
 app = FastAPI(title="AI Tutor Backend")
 
@@ -31,13 +33,12 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-def _startup():
+def _startup() -> None:
     init_db()
     ensure_bucket()
 
 
 # ---------- Auth ----------
-
 
 class RegisterReq(BaseModel):
     email: EmailStr
@@ -61,12 +62,17 @@ def _normalize_role(role: str | None) -> str:
 
 
 @app.post("/api/auth/register", response_model=TokenResp)
-def register(req: RegisterReq, s: Session = Depends(get_session)):
+def register(req: RegisterReq, s: Session = Depends(get_session)) -> TokenResp:
     exists = s.exec(select(UserDB).where(UserDB.email == req.email)).first()
     if exists:
         raise HTTPException(400, "Email already registered")
     role = _normalize_role(req.role)
-    user = UserDB(email=req.email, username=req.username, password_hash=hash_password(req.password), role=role)
+    user = UserDB(
+        email=req.email,
+        username=req.username,
+        password_hash=hash_password(req.password),
+        role=role,
+    )
     s.add(user)
     s.commit()
     s.refresh(user)
@@ -75,7 +81,7 @@ def register(req: RegisterReq, s: Session = Depends(get_session)):
 
 
 @app.post("/api/auth/login", response_model=TokenResp)
-def login(req: LoginReq, s: Session = Depends(get_session)):
+def login(req: LoginReq, s: Session = Depends(get_session)) -> TokenResp:
     user = s.exec(select(UserDB).where(UserDB.email == req.email)).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(401, "Invalid credentials")
@@ -91,7 +97,7 @@ class MeResp(BaseModel):
 
 
 @app.get("/api/me", response_model=MeResp)
-def me(user: UserDB = Depends(get_current_user)):
+def me(user: UserDB = Depends(get_current_user)) -> MeResp:
     if not user:
         raise HTTPException(401, "Unauthorized")
     return MeResp(id=user.id, email=user.email, username=user.username, role=user.role)
@@ -130,7 +136,11 @@ class QuestionItem(BaseModel):
 
 
 @app.post("/api/admin/topics", response_model=TopicResp)
-def admin_create_topic(req: TopicCreateReq, s: Session = Depends(get_session), admin: UserDB = Depends(require_admin)):
+def admin_create_topic(
+    req: TopicCreateReq,
+    s: Session = Depends(get_session),
+    admin: UserDB = Depends(require_admin),
+) -> TopicResp:
     existing = s.exec(select(TopicDB).where(TopicDB.name == req.name)).first()
     if existing:
         raise HTTPException(400, "Topic with this name already exists")
@@ -147,7 +157,7 @@ def admin_add_question(
     req: QuestionCreateReq,
     s: Session = Depends(get_session),
     _: UserDB = Depends(require_admin),
-):
+) -> QuestionItem:
     topic = s.get(TopicDB, topic_id)
     if not topic:
         raise HTTPException(404, "Topic not found")
@@ -165,28 +175,28 @@ def admin_add_question(
 
 
 @app.get("/api/topics", response_model=list[TopicResp])
-def list_topics(s: Session = Depends(get_session)):
+def list_topics(s: Session = Depends(get_session)) -> list[TopicResp]:
     topics = s.exec(select(TopicDB)).all()
-    # Подсчёт количества вопросов на тему
     resp: list[TopicResp] = []
     for t in topics:
         cnt = s.exec(select(func.count(QuestionDB.id)).where(QuestionDB.topic_id == t.id)).one()
-        # cnt возвращается как Row; вытащим скаляр
         count_value = int(cnt[0]) if isinstance(cnt, tuple) else int(cnt)
         resp.append(TopicResp(id=t.id, name=t.name, question_count=count_value))
     return resp
 
 
 @app.get("/api/topics/{topic_id}/questions", response_model=list[QuestionItem])
-def list_topic_questions(topic_id: str, s: Session = Depends(get_session), _: UserDB = Depends(require_admin)):
+def list_topic_questions(
+    topic_id: str,
+    s: Session = Depends(get_session),
+    _: UserDB = Depends(require_admin),
+) -> list[QuestionItem]:
     topic = s.get(TopicDB, topic_id)
     if not topic:
         raise HTTPException(404, "Topic not found")
-    rows = (
-        s.exec(
-            select(QuestionDB).where(QuestionDB.topic_id == topic.id).order_by(QuestionDB.created_at.asc())
-        ).all()
-    )
+    rows = s.exec(
+        select(QuestionDB).where(QuestionDB.topic_id == topic.id).order_by(QuestionDB.created_at.asc())
+    ).all()
     return [
         QuestionItem(id=q.id, text=q.text, ideal_answer=q.ideal_answer, created_at=q.created_at.isoformat())
         for q in rows
@@ -194,7 +204,6 @@ def list_topic_questions(topic_id: str, s: Session = Depends(get_session), _: Us
 
 
 # ---------- Sessions / Chat ----------
-
 
 class StartSessionReq(BaseModel):
     mode: str  # "exam"|"diagnostic"
@@ -212,7 +221,7 @@ def start_session(
     req: StartSessionReq,
     s: Session = Depends(get_session),
     user: UserDB | None = Depends(get_current_user),
-):
+) -> StartSessionResp:
     se = SessionDB(
         mode=req.mode,
         topic=req.topic,
@@ -251,22 +260,22 @@ def send_message(
     req: ChatReq,
     s: Session = Depends(get_session),
     user: UserDB | None = Depends(get_current_user),
-):
+) -> ChatResp:
     _ = moderation_guard(req.message, session_id=session_id)
     se = s.get(SessionDB, session_id)
     if not se or se.status != "active":
         raise HTTPException(404, "Session not found or inactive")
     if se.user_id and user and se.user_id != user.id:
         raise HTTPException(403, "Forbidden")
-    last_q = (
-        s.exec(
-            select(MessageDB)
-            .where(MessageDB.session_id == session_id, MessageDB.role == "assistant")
-            .order_by(MessageDB.ts.desc())
-        ).first()
-    )
+
+    last_q = s.exec(
+        select(MessageDB)
+        .where(MessageDB.session_id == session_id, MessageDB.role == "assistant")
+        .order_by(MessageDB.ts.desc())
+    ).first()
     last_bloom = last_q.bloom_level if last_q else None
     prev_diff = "medium"
+
     reply, meta = run_turn(
         s,
         session_id=session_id,
@@ -290,7 +299,7 @@ def get_report(
     session_id: str,
     s: Session = Depends(get_session),
     user: UserDB | None = Depends(get_current_user),
-):
+) -> ReportResp:
     se = s.get(SessionDB, session_id)
     if not se:
         raise HTTPException(404, "Session not found")
@@ -306,7 +315,7 @@ def complete_session(
     session_id: str,
     s: Session = Depends(get_session),
     user: UserDB | None = Depends(get_current_user),
-):
+) -> dict:
     se = s.get(SessionDB, session_id)
     if not se:
         raise HTTPException(404, "Session not found")
@@ -320,7 +329,6 @@ def complete_session(
 
 # ---------- History / Metrics ----------
 
-
 class SessionBrief(BaseModel):
     id: str
     topic: str
@@ -330,16 +338,24 @@ class SessionBrief(BaseModel):
 
 
 @app.get("/api/me/sessions", response_model=list[SessionBrief])
-def my_sessions(s: Session = Depends(get_session), user: UserDB | None = Depends(get_current_user)):
+def my_sessions(
+    s: Session = Depends(get_session),
+    user: UserDB | None = Depends(get_current_user),
+) -> list[SessionBrief]:
     if not user:
         raise HTTPException(401, "Unauthorized")
-    rows = (
-        s.exec(select(SessionDB).where(SessionDB.user_id == user.id).order_by(SessionDB.started_at.desc()))
-        .all()
-    )
+    rows = s.exec(
+        select(SessionDB)
+        .where(SessionDB.user_id == user.id)
+        .order_by(SessionDB.started_at.desc())
+    ).all()
     return [
         SessionBrief(
-            id=r.id, topic=r.topic, mode=r.mode, status=r.status, started_at=r.started_at.isoformat()
+            id=r.id,
+            topic=r.topic,
+            mode=r.mode,
+            status=r.status,
+            started_at=r.started_at.isoformat(),
         )
         for r in rows
     ]
@@ -359,16 +375,15 @@ def list_messages(
     session_id: str,
     s: Session = Depends(get_session),
     user: UserDB | None = Depends(get_current_user),
-):
+) -> list[MessageItem]:
     se = s.get(SessionDB, session_id)
     if not se:
         raise HTTPException(404, "Session not found")
     if se.user_id and user and se.user_id != user.id:
         raise HTTPException(403, "Forbidden")
-    rows = (
-        s.exec(select(MessageDB).where(MessageDB.session_id == session_id).order_by(MessageDB.ts.asc()))
-        .all()
-    )
+    rows = s.exec(
+        select(MessageDB).where(MessageDB.session_id == session_id).order_by(MessageDB.ts.asc())
+    ).all()
     return [
         MessageItem(
             role=m.role,
@@ -394,16 +409,15 @@ def session_metrics(
     session_id: str,
     s: Session = Depends(get_session),
     user: UserDB | None = Depends(get_current_user),
-):
+) -> MetricsResp:
     se = s.get(SessionDB, session_id)
     if not se:
         raise HTTPException(404, "Session not found")
     if se.user_id and user and se.user_id != user.id:
         raise HTTPException(403, "Forbidden")
-    rows = (
-        s.exec(select(MessageDB).where(MessageDB.session_id == session_id).order_by(MessageDB.ts.asc()))
-        .all()
-    )
+    rows = s.exec(
+        select(MessageDB).where(MessageDB.session_id == session_id).order_by(MessageDB.ts.asc())
+    ).all()
     scores = [m.score for m in rows if m.role == "user" and m.score is not None]
     avg = sum(scores) / len(scores) if scores else None
     bloom = Counter([m.bloom_level for m in rows if m.role == "user" and m.bloom_level])
@@ -412,6 +426,30 @@ def session_metrics(
     return MetricsResp(avg_score=avg, bloom_counts=dict(bloom), solo_counts=dict(solo), turns=turns)
 
 
+# ---------- Testbench ----------
+
+class TestCase(BaseModel):
+    question: str
+    ideal_answer: str
+
+
+class TestbenchReq(BaseModel):
+    topic: str
+    cases: list[TestCase]
+
+
+@app.post("/api/testbench/run")
+def testbench_run(req: TestbenchReq) -> dict:
+    """
+    Простая проверка: прогоняем эталонные ответы через Judge и возвращаем сырые метрики.
+    """
+    results = []
+    for c in req.cases:
+        gold = score_answer(c.question, c.ideal_answer)
+        results.append({"question": c.question, "ideal_answer": c.ideal_answer, "eval": gold})
+    return {"topic": req.topic, "count": len(results), "results": results}
+
+
 @app.get("/health")
-def health():
+def health() -> dict:
     return {"ok": True}

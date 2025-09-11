@@ -5,7 +5,9 @@ services:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
     command: server /data --console-address ":9001"
-    ports: ["9000:9000","9001:9001"]
+    ports:
+      - "9000:9000"
+      - "9001:9001"
     volumes:
       - ./minio_data:/data
 
@@ -16,8 +18,10 @@ services:
     env_file: .env
     environment:
       # внутри контейнера MinIO доступен по имени сервиса
-      S3_ENDPOINT_URL: http://minio:9000
-    ports: ["8000:8000"]
+      S3_ENDPOINT_URL: "http://minio:9000"
+      CHROMA_TELEMETRY_ENABLED: "false"
+    ports:
+      - "8000:8000"
     volumes:
       - ./backend:/app/backend
       - ./chroma_store:/app/chroma_store
@@ -25,7 +29,10 @@ services:
     depends_on:
       - minio
     healthcheck:
-      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\nPY"]
+      test:
+        - CMD-SHELL
+        - >
+          python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"
       interval: 5s
       timeout: 3s
       retries: 20
@@ -38,8 +45,9 @@ services:
       dockerfile: Dockerfile.frontend
     env_file: .env
     environment:
-      BACKEND_URL: http://backend:8000
-    ports: ["8501:8501"]
+      BACKEND_URL: "http://backend:8000"
+    ports:
+      - "8501:8501"
     volumes:
       - ./frontend:/app/frontend
     depends_on:
