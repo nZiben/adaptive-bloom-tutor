@@ -4,6 +4,7 @@ import chromadb
 from chromadb.config import Settings
 from ..config import settings
 from ..llm.router import client as llm_client
+from ..llm.errors import RateLimitError, LLMError
 
 COLLECTION = "content_bank"
 
@@ -24,7 +25,7 @@ def _collection():
 def add_docs(docs: list[dict]):
     col = _collection()
     texts = [d["text"] for d in docs]
-    embs = llm_client.embed(texts)
+    embs = llm_client.embed(texts)  # пусть поднимет исключение выше — сидирование делаем оффлайн
     col.add(
         documents=texts,
         embeddings=embs,
@@ -38,7 +39,11 @@ def add_docs(docs: list[dict]):
 
 def query(text: str, n: int = 5, topic: str | None = None):
     col = _collection()
-    q_emb = llm_client.embed([text])[0]
+    try:
+        q_emb = llm_client.embed([text])[0]
+    except (RateLimitError, LLMError, Exception):
+        # Если эмбеддинги недоступны (rate limit/ошибка), просто вернём пустой контекст — тут есть graceful fallback в Tutor.
+        return []
     where = {"topic": topic} if topic else None
     res = col.query(query_embeddings=[q_emb], n_results=n, where=where)
     hits = []
